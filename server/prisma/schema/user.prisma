@@ -1,0 +1,82 @@
+
+model User {
+    id                 String     @id @default(uuid())
+    email              String     @unique
+    password           String
+    role               UserRole   @default(TOURIST)
+    needPasswordChange Boolean    @default(true)
+    status             UserStatus @default(ACTIVE)
+    createdAt          DateTime   @default(now())
+    updatedAt          DateTime   @updatedAt
+
+    admin            Admin?
+    host             Host?
+    tourist          Tourist?
+    bookings         Booking[]
+    payments         Payment[]
+    blogComments     BlogComment[]
+    blogLikes        BlogLike[]
+    blogCommentLikes BlogCommentLike[]
+
+    @@map("users")
+}
+
+model Admin {
+    id            String   @id @default(uuid())
+    name          String
+    email         String   @unique
+    profilePhoto  String?
+    contactNumber String?
+    isDeleted     Boolean  @default(false)
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    user User @relation(fields: [email], references: [email])
+
+    @@map("admins")
+}
+model Host {
+    id               String   @id @default(uuid())
+    name             String
+    email            String   @unique
+    profilePhoto     String?
+    phone            String?
+    bio              String?
+    hometown         String?
+    visitedLocations String[]
+    isVerified       Boolean  @default(false)
+    isDeleted        Boolean  @default(false)
+    tourLimit        Int      @default(4) 
+    currentTourCount Int      @default(0)
+    subscriptionId   String?
+    createdAt        DateTime @default(now())
+    updatedAt        DateTime @updatedAt
+    tours            Tour[]
+    blogs            Blog[]
+
+    user          User           @relation(fields: [email], references: [email])
+    subscriptions Subscription[]
+
+    @@map("hosts")
+}
+
+
+
+model Tourist {
+    id               String    @id @default(uuid())
+    email            String    @unique
+    name             String
+    profilePhoto     String?
+    bio              String?
+    interests        String?
+    location         String?
+    visitedCountries String?
+    isDeleted        Boolean   @default(false)
+    createdAt        DateTime  @default(now())
+    updatedAt        DateTime  @updatedAt
+    bookings         Booking[]
+
+    user User @relation(fields: [email], references: [email])
+
+    @@map("tourists")
+}

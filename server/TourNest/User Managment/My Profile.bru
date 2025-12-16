@@ -1,0 +1,29 @@
+meta {
+  name: My Profile
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{BASE_URL}}/users/me
+  body: json
+  auth: inherit
+}
+
+params:query {
+  ~email: fahimahammed.cse@gmail.com
+  ~searchTerm: fahim
+}
+
+headers {
+  Authorization: {{PATIENT_TOKEN}}
+}
+
+vars:pre-request {
+  PATIENT_TOKEN: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZhcmhhZGhvc3NlbjI1OTBAZ21haWwuY29tIiwicm9sZSI6IlRPVVJJU1QiLCJpYXQiOjE3NjU1MTgzMTQsImV4cCI6MTc2NTYwNDcxNH0.Av34SUlDjJALKlUcmxuWq-uaMD8mmKKZCfz8c3RPNdE
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

@@ -1,0 +1,34 @@
+meta {
+  name: Create Admin
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{url}}/user/create-admin
+  body: multipartForm
+  auth: inherit
+}
+
+headers {
+  Authorization: {{ADMIN_TOKEN}}
+}
+
+body:multipart-form {
+  file: @file(/C:/Users/User/Downloads/1737896498237 (1).jpg)
+  data: '''
+    {
+        "password" : "123456",
+        "admin" : {
+            "name" : "Mezba",
+            "email" : "mezba12@ph.com",
+            "contactNumber": "0123456789"
+        }
+    }
+  '''
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

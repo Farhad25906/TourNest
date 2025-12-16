@@ -1,0 +1,30 @@
+meta {
+  name: All Tours
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{BASE_URL}}/user/?status=ACTIVE
+  body: none
+  auth: inherit
+}
+
+params:query {
+  status: ACTIVE
+  ~email: fahimahammed.cse@gmail.com
+  ~searchTerm: fahim
+}
+
+headers {
+  Authorization: {{ADMIN_TOKEN}}
+}
+
+vars:pre-request {
+  ADMIN_TOKEN: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZhcmhhZGhvc3NlbjkwMzZAZ21haWwuY29tIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzY0NzA2MDc1LCJleHAiOjE3NjQ3OTI0NzV9.E-hzBGVcUlHsTS8jmkmahKMArUAEINt9YaYrizfIGts
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

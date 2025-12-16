@@ -1,0 +1,42 @@
+meta {
+  name: Create Host
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{url}}/user/create-doctor
+  body: multipartForm
+  auth: inherit
+}
+
+headers {
+  Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InN1cGVyQGFkbWluLmNvbSIsInJvbGUiOiJTVVBFUl9BRE1JTiIsImlhdCI6MTc1NDIxOTAwMSwiZXhwIjoxNzU0ODIzODAxfQ.74joePxA5igf6Z_E_o0Ol27kiMEPfEviJ1xZ298UQX0
+}
+
+body:multipart-form {
+  file: @file(/C:/Users/User/Downloads/1737896498237 (1).jpg)
+  data: '''
+    {
+        "password": "123456",
+        "doctor": {
+            "email": "doctor5@gmail.com",
+            "name": "Dr. Shafia",
+            "contactNumber": "+1234567890",
+            "address": "123 Medical Street, Cityville",
+            "registrationNumber": "12345",
+            "experience": 5,
+            "gender": "MALE",
+            "appointmentFee": 100,
+            "qualification": "MD, PhD",
+            "currentWorkingPlace": "City Hospital",
+            "designation": "Senior Consultant"
+        }
+    }
+  '''
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

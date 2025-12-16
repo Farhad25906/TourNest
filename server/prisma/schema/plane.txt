@@ -1,0 +1,471 @@
+// schema.prisma
+
+// User Models
+model User {
+  id                 String     @id @default(uuid())
+  email              String     @unique
+  password           String
+  role               UserRole   @default(TOURIST)
+  needPasswordChange Boolean    @default(true)
+  status             UserStatus @default(ACTIVE)
+  isEmailVerified    Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  admin    Admin?
+  host     Host?
+  tourist  Tourist?
+  bookings Booking[]
+  payments Payment[]
+  reviews  Review[]
+  messages Message[]
+
+  @@map("users")
+}
+
+model Admin {
+  id            String  @id @default(uuid())
+  name          String
+  email         String  @unique
+  profilePhoto  String?
+  contactNumber String?
+  isDeleted     Boolean @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [email], references: [email])
+
+  @@map("admins")
+}
+
+model Host {
+  id               String   @id @default(uuid())
+  name             String
+  email            String   @unique
+  profilePhoto     String?
+  phone            String?
+  bio              String?
+  hometown         String?
+  visitedLocations String[]
+  isVerified       Boolean  @default(false)
+  isDeleted        Boolean  @default(false)
+  tourLimit        Int      @default(3) // Annual tour limit
+  currentTourCount Int      @default(0) // Current year's tour count
+  subscriptionId   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user         User            @relation(fields: [email], references: [email])
+  tours        Tour[]
+  blogs        Blog[]
+  subscription Subscription?    @relation(fields: [subscriptionId], references: [id])
+  reviews      Review[]         @relation("host_reviews")
+  ratings      Rating[]
+  payments     Payment[]
+
+  @@map("hosts")
+}
+
+model Tourist {
+  id               String  @id @default(uuid())
+  email            String  @unique
+  name             String
+  profilePhoto     String?
+  bio              String?
+  interests        String?
+  location         String?
+  visitedCountries String?
+  isDeleted        Boolean @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user     User     @relation(fields: [email], references: [email])
+  bookings Booking[]
+  reviews  Review[] @relation("tourist_reviews")
+  ratings  Rating[]
+  payments Payment[]
+
+  @@map("tourists")
+}
+
+// Travel & Tour Models
+model Tour {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  destination String
+  city        String
+  country     String
+  startDate   DateTime
+  endDate     DateTime
+  duration    Int      // in days
+  price       Float
+  maxGroupSize Int
+  currentGroupSize Int @default(0)
+  category    TourCategory
+  difficulty  DifficultyLevel
+  included    String[] // What's included
+  excluded    String[] // What's excluded
+  itinerary   Json     // Detailed itinerary
+  meetingPoint String
+  images      String[]
+  isActive    Boolean  @default(true)
+  isFeatured  Boolean  @default(false)
+  views       Int      @default(0)
+  hostId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  host     Host     @relation(fields: [hostId], references: [id])
+  bookings Booking[]
+  reviews  Review[] @relation("tour_reviews")
+  ratings  Rating[]
+
+  @@map("tours")
+}
+
+model Booking {
+  id          String        @id @default(uuid())
+  touristId   String
+  tourId      String
+  bookingDate DateTime      @default(now())
+  status      BookingStatus @default(PENDING)
+  paymentStatus PaymentStatus @default(PENDING)
+  totalAmount Float
+  numberOfPeople Int
+  specialRequests String?
+  isReviewed  Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tourist   Tourist   @relation(fields: [touristId], references: [id])
+  tour      Tour      @relation(fields: [tourId], references: [id])
+  payment   Payment?
+  review    Review?   @relation("booking_review")
+
+  @@unique([touristId, tourId, bookingDate])
+  @@map("bookings")
+}
+
+// Subscription & Payment Models
+model SubscriptionPlan {
+  id            String  @id @default(uuid())
+  name          String  // Basic, Premium, Enterprise
+  description   String
+  price         Float
+  duration      Int     // in months
+  tourLimit     Int     // 3, 6, 9, 12
+  canWriteBlogs Boolean @default(true)
+  maxBlogPosts  Int?
+  features      String[]
+  isActive      Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions Subscription[]
+  payments      Payment[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                 String           @id @default(uuid())
+  hostId             String
+  planId             String
+  startDate          DateTime
+  endDate            DateTime
+  status             SubscriptionStatus @default(ACTIVE)
+  autoRenew          Boolean          @default(true)
+  tourLimit          Int
+  remainingTours     Int
+  blogPostsAllowed   Boolean
+  remainingBlogPosts Int?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  host       Host             @relation(fields: [hostId], references: [id])
+  plan       SubscriptionPlan @relation(fields: [planId], references: [id])
+  payments   Payment[]
+
+  @@map("subscriptions")
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  userId          String
+  bookingId       String?
+  subscriptionId  String?
+  amount          Float
+  currency        String        @default("USD")
+  paymentMethod   PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  transactionId   String?
+  paymentGateway  String        // Stripe, SSLCommerz, etc.
+  gatewayResponse Json?
+  paidAt          DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id])
+  booking      Booking?     @relation(fields: [bookingId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@map("payments")
+}
+
+// Blog System
+model Blog {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  excerpt     String?
+  coverImage  String?
+  images      String[]
+  tags        String[]
+  category    BlogCategory
+  status      BlogStatus @default(DRAFT)
+  views       Int      @default(0)
+  likes       Int      @default(0)
+  hostId      String
+  tourId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  publishedAt DateTime?
+
+  host        Host        @relation(fields: [hostId], references: [id])
+  tour        Tour?       @relation(fields: [tourId], references: [id])
+  comments    BlogComment[]
+  likesCount  BlogLike[]
+
+  @@map("blogs")
+}
+
+model BlogComment {
+  id        String   @id @default(uuid())
+  content   String
+  authorId  String
+  blogId    String
+  parentId  String?  // For nested comments
+  isEdited  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author   User        @relation(fields: [authorId], references: [id])
+  blog     Blog        @relation(fields: [blogId], references: [id])
+  parent   BlogComment? @relation("BlogComment_parent", fields: [parentId], references: [id])
+  replies  BlogComment[] @relation("BlogComment_parent")
+  likes    BlogCommentLike[]
+
+  @@map("blog_comments")
+}
+
+model BlogLike {
+  id        String   @id @default(uuid())
+  userId    String
+  blogId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  blog Blog @relation(fields: [blogId], references: [id])
+
+  @@unique([userId, blogId])
+  @@map("blog_likes")
+}
+
+model BlogCommentLike {
+  id        String   @id @default(uuid())
+  userId    String
+  commentId String
+  createdAt DateTime @default(now())
+
+  user    User        @relation(fields: [userId], references: [id])
+  comment BlogComment @relation(fields: [commentId], references: [id])
+
+  @@unique([userId, commentId])
+  @@map("blog_comment_likes")
+}
+
+// Review & Rating System
+model Review {
+  id         String   @id @default(uuid())
+  rating     Int      // 1-5
+  comment    String
+  touristId  String
+  hostId     String?
+  tourId     String?
+  bookingId  String?  @unique
+  isEdited   Boolean  @default(false)
+  helpful    Int      @default(0)
+  notHelpful Int      @default(0)
+  status     ReviewStatus @default(PENDING)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tourist  Tourist @relation("tourist_reviews", fields: [touristId], references: [id])
+  host     Host?   @relation("host_reviews", fields: [hostId], references: [id])
+  tour     Tour?   @relation("tour_reviews", fields: [tourId], references: [id])
+  booking  Booking? @relation("booking_review", fields: [bookingId], references: [id])
+  helpfulUsers ReviewHelpful[]
+
+  @@unique([touristId, bookingId])
+  @@map("reviews")
+}
+
+model ReviewHelpful {
+  id        String   @id @default(uuid())
+  userId    String
+  reviewId  String
+  isHelpful Boolean
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  review Review @relation(fields: [reviewId], references: [id])
+
+  @@unique([userId, reviewId])
+  @@map("review_helpful")
+}
+
+model Rating {
+  id        String   @id @default(uuid())
+  score     Int      // 1-5
+  touristId String
+  hostId    String?
+  tourId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tourist Tourist @relation(fields: [touristId], references: [id])
+  host    Host?   @relation(fields: [hostId], references: [id])
+  tour    Tour?   @relation(fields: [tourId], references: [id])
+
+  @@unique([touristId, hostId, tourId])
+  @@map("ratings")
+}
+
+// Messaging System
+model Message {
+  id         String        @id @default(uuid())
+  senderId   String
+  receiverId String
+  content    String
+  messageType MessageType @default(TEXT)
+  isRead     Boolean      @default(false)
+  isEdited   Boolean      @default(false)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  sender   User @relation("sent_messages", fields: [senderId], references: [id])
+  receiver User @relation("received_messages", fields: [receiverId], references: [id])
+
+  @@map("messages")
+}
+
+model Conversation {
+  id         String   @id @default(uuid())
+  userOneId  String
+  userTwoId  String
+  lastMessageId String?
+  unreadCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userOne      User     @relation("user_one_conversations", fields: [userOneId], references: [id])
+  userTwo      User     @relation("user_two_conversations", fields: [userTwoId], references: [id])
+  lastMessage  Message? @relation(fields: [lastMessageId], references: [id])
+  messages     Message[]
+
+  @@unique([userOneId, userTwoId])
+  @@map("conversations")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  HOST
+  TOURIST
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum TourCategory {
+  ADVENTURE
+  CULTURE
+  FOOD
+  NATURE
+  RELAXATION
+  URBAN
+  BEACH
+  MOUNTAIN
+}
+
+enum DifficultyLevel {
+  EASY
+  MODERATE
+  DIFFICULT
+  EXTREME
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  DIGITAL_WALLET
+  STRIPE
+  SSLCOMMERZ
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  SUSPENDED
+}
+
+enum BlogCategory {
+  TRAVEL_TIPS
+  DESTINATION_GUIDES
+  TOUR_STORIES
+  LOCAL_CULTURE
+  FOOD_EXPERIENCES
+  ADVENTURE_TALES
+}
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REPORTED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  LOCATION
+}
