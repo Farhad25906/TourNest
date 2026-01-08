@@ -86,24 +86,32 @@ const createTour = async (req: Request): Promise<Tour> => {
   return result;
 };
 
+// In tour.service.ts, update getAllTours function:
 const getAllTours = async (params: any, options: IOptions) => {
   const { page, limit, skip, sortBy, sortOrder } =
     paginationHelper.calculatePagination(options);
   const { searchTerm, minPrice, maxPrice, startDate, endDate, ...filterData } =
     params;
 
+  console.log("Received params:", params);
+  console.log("Filter data:", filterData);
+  console.log("Options:", options);
+
   const andConditions: Prisma.TourWhereInput[] = [];
 
-  // Filter by active tours by default
-  if (filterData.isActive === undefined) {
-    andConditions.push({
-      isActive: true,
-    });
-  }
+  // Filter by active tours by default (only if not explicitly set)
+  // Remove the default filter temporarily for testing
+  // if (filterData.isActive === undefined) {
+  //   andConditions.push({
+  //     isActive: true,
+  //   });
+  // }
 
+  // Search functionality
   if (searchTerm) {
+    console.log("Searching for:", searchTerm);
     andConditions.push({
-      OR: tourSearchableFields.map((field) => ({
+      OR: hostTourSearchableFields.map((field) => ({
         [field]: {
           contains: searchTerm,
           mode: "insensitive",
@@ -114,6 +122,7 @@ const getAllTours = async (params: any, options: IOptions) => {
 
   // Price range filter
   if (minPrice !== undefined || maxPrice !== undefined) {
+    console.log("Price filter:", { minPrice, maxPrice });
     const priceCondition: any = {};
     if (minPrice !== undefined) priceCondition.gte = Number(minPrice);
     if (maxPrice !== undefined) priceCondition.lte = Number(maxPrice);
@@ -122,6 +131,7 @@ const getAllTours = async (params: any, options: IOptions) => {
 
   // Date range filter
   if (startDate) {
+    console.log("Start date filter:", startDate);
     andConditions.push({
       startDate: {
         gte: new Date(startDate),
@@ -130,6 +140,7 @@ const getAllTours = async (params: any, options: IOptions) => {
   }
 
   if (endDate) {
+    console.log("End date filter:", endDate);
     andConditions.push({
       endDate: {
         lte: new Date(endDate),
@@ -137,56 +148,104 @@ const getAllTours = async (params: any, options: IOptions) => {
     });
   }
 
-  // Other filters
+  // Other filters (destination, city, country, category, difficulty, isFeatured)
   if (Object.keys(filterData).length > 0) {
-    andConditions.push({
-      AND: Object.keys(filterData).map((key) => ({
-        [key]: {
-          equals: (filterData as any)[key],
-        },
-      })),
+    console.log("Other filters:", filterData);
+    const filterConditions: Prisma.TourWhereInput[] = [];
+
+    Object.keys(filterData).forEach((key) => {
+      if (filterData[key] !== undefined && filterData[key] !== "") {
+        console.log(`Filter ${key}:`, filterData[key]);
+        if (key === "difficulty" || key === "category") {
+          filterConditions.push({
+            [key]: {
+              equals: filterData[key],
+            },
+          });
+        } else if (key === "isFeatured" || key === "isActive") {
+          const boolValue =
+            filterData[key] === "true" || filterData[key] === true;
+          console.log(`Boolean filter ${key}:`, boolValue);
+          filterConditions.push({
+            [key]: {
+              equals: boolValue,
+            },
+          });
+        } else {
+          filterConditions.push({
+            [key]: {
+              contains: filterData[key],
+              mode: "insensitive",
+            },
+          });
+        }
+      }
     });
+
+    if (filterConditions.length > 0) {
+      andConditions.push({
+        AND: filterConditions,
+      });
+    }
+  }
+
+  // If no conditions, get all tours
+  if (andConditions.length === 0) {
+    console.log("No filters applied, getting all tours");
   }
 
   const whereConditions: Prisma.TourWhereInput =
     andConditions.length > 0 ? { AND: andConditions } : {};
 
-  const result = await prisma.tour.findMany({
-    skip,
-    take: limit,
-    where: whereConditions,
-    orderBy: {
-      [sortBy]: sortOrder,
-    },
-    include: {
-      host: {
-        select: {
-          id: true,
-          name: true,
-          profilePhoto: true,
-          bio: true,
-          user: {
-            select: {
-              email: true,
+  console.log(
+    "Final where conditions:",
+    JSON.stringify(whereConditions, null, 2)
+  );
+
+  try {
+    const result = await prisma.tour.findMany({
+      skip,
+      take: limit,
+      where: whereConditions,
+      orderBy: {
+        [sortBy]: sortOrder,
+      },
+      include: {
+        host: {
+          select: {
+            id: true,
+            name: true,
+            profilePhoto: true,
+            bio: true,
+            user: {
+              select: {
+                email: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    });
 
-  const total = await prisma.tour.count({
-    where: whereConditions,
-  });
+    const total = await prisma.tour.count({
+      where: whereConditions,
+    });
 
-  return {
-    meta: {
-      page,
-      limit,
-      total,
-    },
-    data: result,
-  };
+    console.log(`Found ${total} tours`);
+    console.log("Tours found:", result);
+
+    return {
+      meta: {
+        page,
+        limit,
+        total,
+      },
+      data: result,
+    };
+  } catch (error) {
+    console.error("Error fetching tours:", error);
+    throw error;
+  }
 };
 
 const getSingleTour = async (id: string) => {
@@ -311,7 +370,8 @@ const updateTour = async (id: string, req: Request): Promise<Tour> => {
   return result;
 };
 
-const deleteTour = async (id: string, userId: string) => {
+const deleteTour = async (id: string) => {
+  // First check if tour exists
   const tour = await prisma.tour.findUnique({
     where: { id },
   });
@@ -320,16 +380,7 @@ const deleteTour = async (id: string, userId: string) => {
     throw new Error("Tour not found");
   }
 
-  // Check if user is the host of this tour or an admin
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true },
-  });
-
-  if (tour.hostId !== userId && user?.role !== "ADMIN") {
-    throw new Error("You are not authorized to delete this tour");
-  }
-
+  // Delete the tour without authentication check
   const result = await prisma.$transaction(async (tx) => {
     // Delete the tour
     const deletedTour = await tx.tour.delete({
@@ -374,7 +425,7 @@ const getHostTours = async (req: Request, params: any, options: IOptions) => {
     params;
 
   const andConditions: Prisma.TourWhereInput[] = [
-    { hostId: host.id } // Filter by current host's ID
+    { hostId: host.id }, // Filter by current host's ID
   ];
 
   // Add other filters
@@ -468,9 +519,9 @@ const getHostTours = async (req: Request, params: any, options: IOptions) => {
       limit,
       total,
     },
-    data: result.map(tour => ({
+    data: result.map((tour) => ({
       ...tour,
-      bookingCount: tour._count.bookings
+      bookingCount: tour._count.bookings,
     })),
   };
 };
@@ -512,24 +563,31 @@ const getHostTourStats = async (req: Request) => {
   // Calculate statistics
   const now = new Date();
   const totalTours = tours.length;
-  const activeTours = tours.filter(tour => tour.isActive).length;
-  const featuredTours = tours.filter(tour => tour.isFeatured).length;
+  const activeTours = tours.filter((tour) => tour.isActive).length;
+  const featuredTours = tours.filter((tour) => tour.isFeatured).length;
   const totalViews = tours.reduce((sum, tour) => sum + (tour.views || 0), 0);
-  const upcomingTours = tours.filter(tour => new Date(tour.startDate) > now).length;
-  const pastTours = tours.filter(tour => new Date(tour.endDate) < now).length;
-  
+  const upcomingTours = tours.filter(
+    (tour) => new Date(tour.startDate) > now
+  ).length;
+  const pastTours = tours.filter((tour) => new Date(tour.endDate) < now).length;
+
   // Calculate total bookings
-  const totalBookings = tours.reduce((sum, tour) => sum + tour._count.bookings, 0);
-  
+  const totalBookings = tours.reduce(
+    (sum, tour) => sum + tour._count.bookings,
+    0
+  );
+
   // Calculate confirmed bookings
   const confirmedBookings = tours.reduce((sum, tour) => {
-    const confirmed = tour.bookings.filter(booking => booking.status === 'CONFIRMED').length;
+    const confirmed = tour.bookings.filter(
+      (booking) => booking.status === "CONFIRMED"
+    ).length;
     return sum + confirmed;
   }, 0);
 
   // Tours by category
   const toursByCategory = tours.reduce((acc, tour) => {
-    const category = tour.category || 'Uncategorized';
+    const category = tour.category || "Uncategorized";
     acc[category] = (acc[category] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -543,13 +601,16 @@ const getHostTourStats = async (req: Request) => {
 
   // Recent tours (last 5)
   const recentTours = tours
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
     .slice(0, 5)
-    .map(tour => ({
+    .map((tour) => ({
       id: tour.id,
       title: tour.title,
       createdAt: tour.createdAt,
-      status: tour.isActive ? 'Active' : 'Inactive',
+      status: tour.isActive ? "Active" : "Inactive",
       views: tour.views,
       bookingCount: tour._count.bookings,
     }));
@@ -559,7 +620,7 @@ const getHostTourStats = async (req: Request) => {
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
   const toursByMonth = await prisma.tour.groupBy({
-    by: ['createdAt'],
+    by: ["createdAt"],
     where: {
       hostId: host.id,
       createdAt: {
@@ -606,10 +667,10 @@ const getHostSingleTour = async (id: string, req: Request) => {
     throw new Error("Host not found");
   }
 
-  const result = await prisma.tour.findUnique({
-    where: { 
+  const result = await prisma.tour.findFirst({
+    where: {
       id,
-      hostId: host.id // Ensure the tour belongs to this host
+      hostId: host.id,
     },
     include: {
       host: {
@@ -633,17 +694,16 @@ const getHostSingleTour = async (id: string, req: Request) => {
           userId: true,
           status: true,
           bookingDate: true,
-          totalPrice: true,
+          totalAmount: true,
           user: {
             select: {
-              name: true,
               email: true,
-              profilePhoto: true,
+              // profilePhoto: true,
             },
           },
         },
         orderBy: {
-          bookingDate: 'desc',
+          bookingDate: "desc",
         },
       },
       _count: {
@@ -661,9 +721,9 @@ const getHostSingleTour = async (id: string, req: Request) => {
   // Calculate booking statistics for this tour
   const bookingStats = {
     total: result._count.bookings,
-    confirmed: result.bookings.filter(b => b.status === 'CONFIRMED').length,
-    pending: result.bookings.filter(b => b.status === 'PENDING').length,
-    cancelled: result.bookings.filter(b => b.status === 'CANCELLED').length,
+    confirmed: result.bookings.filter((b) => b.status === "CONFIRMED").length,
+    pending: result.bookings.filter((b) => b.status === "PENDING").length,
+    cancelled: result.bookings.filter((b) => b.status === "CANCELLED").length,
   };
 
   // Don't increment views for host view (only for public view)
@@ -680,7 +740,7 @@ export const TourService = {
   getSingleTour,
   updateTour,
   deleteTour,
-  getHostTours,        // Add this
-  getHostTourStats,    // Add this
-  getHostSingleTour,   // Add this
+  getHostTours, // Add this
+  getHostTourStats, // Add this
+  getHostSingleTour, // Add this
 };

@@ -5,7 +5,7 @@ meta {
 }
 
 post {
-  url: {{url}}/user/create-doctor
+  url: {{url}}/user/create-host
   body: multipartForm
   auth: inherit
 }
@@ -15,22 +15,15 @@ headers {
 }
 
 body:multipart-form {
-  file: @file(/C:/Users/User/Downloads/1737896498237 (1).jpg)
+  file: @file(/home/farhad-hossen/Downloads/doctor1.jpg)
   data: '''
     {
         "password": "123456",
-        "doctor": {
-            "email": "doctor5@gmail.com",
-            "name": "Dr. Shafia",
+        "host": {
+            "email": "farhadhossen25905@gmail.com",
+            "name": "Hossen Farhad",
             "contactNumber": "+1234567890",
-            "address": "123 Medical Street, Cityville",
-            "registrationNumber": "12345",
-            "experience": 5,
-            "gender": "MALE",
-            "appointmentFee": 100,
-            "qualification": "MD, PhD",
-            "currentWorkingPlace": "City Hospital",
-            "designation": "Senior Consultant"
+            "location": "123 Medical Street, Cityville"
         }
     }
   '''

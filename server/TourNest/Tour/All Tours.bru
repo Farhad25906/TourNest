@@ -5,13 +5,12 @@ meta {
 }
 
 get {
-  url: {{BASE_URL}}/user/?status=ACTIVE
+  url: {{BASE_URL}}/tour
   body: none
   auth: inherit
 }
 
 params:query {
-  status: ACTIVE
   ~email: fahimahammed.cse@gmail.com
   ~searchTerm: fahim
 }
@@ -21,7 +20,7 @@ headers {
 }
 
 vars:pre-request {
-  ADMIN_TOKEN: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZhcmhhZGhvc3NlbjkwMzZAZ21haWwuY29tIiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzY0NzA2MDc1LCJleHAiOjE3NjQ3OTI0NzV9.E-hzBGVcUlHsTS8jmkmahKMArUAEINt9YaYrizfIGts
+  ADMIN_TOKEN: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZhcmhhZEBwaC5jb20iLCJyb2xlIjoiQURNSU4iLCJpYXQiOjE3NjcyOTc0MTUsImV4cCI6MTc2NzM4MzgxNX0.itLrWaab6wPtU4ZHNFrPgNT7nn1G03q9bnLNYwXXuPo
 }
 
 settings {

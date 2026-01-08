@@ -5,7 +5,7 @@ meta {
 }
 
 post {
-  url: {{url}}/user/create-admin
+  url: {{url}}/users/create-admin
   body: multipartForm
   auth: inherit
 }
@@ -15,14 +15,14 @@ headers {
 }
 
 body:multipart-form {
-  file: @file(/C:/Users/User/Downloads/1737896498237 (1).jpg)
+  file: @file(/home/farhad-hossen/Downloads/person1.jpg)
   data: '''
     {
         "password" : "123456",
         "admin" : {
-            "name" : "Mezba",
-            "email" : "mezba12@ph.com",
-            "contactNumber": "0123456789"
+            "name" : "farhad",
+            "email" : "farhad@ph.com",
+            "contactNumber": "01829313336"
         }
     }
   '''

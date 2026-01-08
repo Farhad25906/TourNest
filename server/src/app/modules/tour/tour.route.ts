@@ -91,7 +91,7 @@ router.patch(
 // Delete tour - only host who created it or admin
 router.delete(
   '/:id',
-  auth(UserRole.HOST, UserRole.ADMIN),
+  // auth(UserRole.HOST, UserRole.ADMIN),
   TourController.deleteTour
 );
 

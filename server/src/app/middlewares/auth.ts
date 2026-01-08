@@ -11,8 +11,8 @@ import envVars from "../config/env";
 const auth = (...roles: string[]) => {
     return async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
         try {
-            const token = req.cookies.accessToken;
-            console.log(token);
+            const token = req.cookies.accessToken || req.headers.authorization;
+            console.log(token,"From Admin");
             
 
             if (!token) {
@@ -20,6 +20,8 @@ const auth = (...roles: string[]) => {
             }
 
             const verifyUser = jwtHelper.verifyToken(token, envVars.JWT_SECRET as Secret);
+            // console.log(verifyUser);
+            
 
             req.user = verifyUser;
 

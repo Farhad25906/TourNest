@@ -1,163 +1,184 @@
-// subscription.middleware.ts (updated)
-import { Request, Response, NextFunction } from "express";
-import { prisma } from "../shared/prisma";
-import catchAsync from "../shared/catchAsync";
+// subscription.middleware.ts
+import { Request, Response, NextFunction } from 'express';
+import { prisma } from '../shared/prisma';
+import { IJWTPayload } from '../types/common';
 
-export const checkTourCreationLimit = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const hostEmail = req.user?.email;
-
-    if (!hostEmail) {
-      return res.status(401).json({
+export const checkTourCreationLimit = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user as IJWTPayload;
+    
+    if (!user || user.role !== 'HOST') {
+      return res.status(403).json({
         success: false,
-        message: "Host not authenticated",
+        message: 'Only hosts can create tours'
       });
     }
 
     const host = await prisma.host.findUnique({
-      where: { email: hostEmail },
+      where: { email: user.email },
+      include: {
+        subscription: {
+          include: {
+            plan: true
+          }
+        }
+      }
     });
 
     if (!host) {
       return res.status(404).json({
         success: false,
-        message: "Host not found",
+        message: 'Host not found'
       });
     }
 
-    // Check if host has reached tour limit
-    if (host.currentTourCount >= host.tourLimit) {
-      // Check if host has an active subscription
-      const activeSubscription = await prisma.subscription.findFirst({
-        where: {
-          hostId: host.id,
-          status: "ACTIVE",
-        },
-        include: { plan: true },
-      });
+    // Calculate current limits
+    let tourLimit = host.tourLimit;
+    let canCreateTour = host.currentTourCount < tourLimit;
 
-      if (!activeSubscription) {
-        return res.status(403).json({
-          success: false,
-          message: `You have reached your tour creation limit (${host.tourLimit}). Please subscribe to a plan.`,
-          data: {
-            currentTourCount: host.currentTourCount,
-            tourLimit: host.tourLimit,
-            remainingTours: 0,
-            needsSubscription: true,
-          },
+    // If host has active subscription, check subscription limits
+    if (host.subscription && host.subscription.status === 'ACTIVE') {
+      const subscription = host.subscription;
+      
+      // Check if subscription is still valid
+      if (new Date() > subscription.endDate) {
+        // Subscription expired, downgrade to free
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { status: 'EXPIRED' }
         });
+        
+        await prisma.host.update({
+          where: { id: host.id },
+          data: {
+            tourLimit: 4,
+            blogLimit: 5
+          }
+        });
+        
+        canCreateTour = host.currentTourCount < 4;
+      } else {
+        // Use subscription limits
+        tourLimit = subscription.tourLimit;
+        const remainingTours = subscription.remainingTours;
+        canCreateTour = remainingTours > 0;
       }
+    }
 
+    if (!canCreateTour) {
       return res.status(403).json({
         success: false,
-        message: `You have reached your tour creation limit (${host.tourLimit}). Please upgrade your plan.`,
+        message: `You have reached your tour limit (${host.currentTourCount}/${tourLimit}). Please upgrade your subscription to create more tours.`,
         data: {
-          currentTourCount: host.currentTourCount,
-          tourLimit: host.tourLimit,
-          remainingTours: 0,
-          currentPlan: activeSubscription.plan.name,
-          needsUpgrade: true,
-        },
+          currentCount: host.currentTourCount,
+          tourLimit,
+          canUpgrade: true
+        }
       });
     }
 
-    // Use Object.defineProperty to safely add the property
-    Object.defineProperty(req, 'host', {
-      value: host,
-      writable: true,
-      configurable: true,
-      enumerable: true
-    });
-    
+    // Add host info to request for use in controller
+    (req as any).hostInfo = host;
     next();
+  } catch (error: any) {
+    console.error('Error checking tour creation limit:', error);
+    next(error);
   }
-);
+};
 
-export const checkBlogCreationPermission = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const hostEmail = req.user?.email;
-
-    if (!hostEmail) {
-      return res.status(401).json({
+export const checkBlogCreationLimit = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user as IJWTPayload;
+    
+    if (!user || user.role !== 'HOST') {
+      return res.status(403).json({
         success: false,
-        message: "Host not authenticated",
+        message: 'Only hosts can create blogs'
       });
     }
 
     const host = await prisma.host.findUnique({
-      where: { email: hostEmail },
+      where: { email: user.email },
+      include: {
+        subscription: {
+          include: {
+            plan: true
+          }
+        }
+      }
     });
 
     if (!host) {
       return res.status(404).json({
         success: false,
-        message: "Host not found",
+        message: 'Host not found'
       });
     }
 
-    // Check if host can write blogs
-    const activeSubscription = await prisma.subscription.findFirst({
-      where: {
-        hostId: host.id,
-        status: "ACTIVE",
-      },
-      include: { plan: true },
-    });
+    let canCreateBlog = false;
+    let blogLimit = host.blogLimit;
+    let message = '';
 
-    if (!activeSubscription || !activeSubscription.plan.canWriteBlogs) {
+    // Check if host has active subscription
+    if (host.subscription && host.subscription.status === 'ACTIVE') {
+      const subscription = host.subscription;
+      
+      // Check if subscription is still valid
+      if (new Date() > subscription.endDate) {
+        // Subscription expired
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { status: 'EXPIRED' }
+        });
+        
+        // Downgrade to free plan (5 blogs)
+        await prisma.host.update({
+          where: { id: host.id },
+          data: {
+            tourLimit: 4,
+            blogLimit: 5
+          }
+        });
+        
+        blogLimit = 5;
+        canCreateBlog = host.currentBlogCount < 5;
+        message = `You have reached your blog limit (${host.currentBlogCount}/5). Please upgrade your subscription.`;
+      } else {
+        // Active subscription
+        if (subscription.blogLimit === null) {
+          // Premium plan - unlimited blogs
+          canCreateBlog = true;
+        } else {
+          // Standard plan - limited blogs
+          const remainingBlogs = subscription.remainingBlogs || (subscription.blogLimit - host.currentBlogCount);
+          canCreateBlog = remainingBlogs > 0;
+          blogLimit = subscription.blogLimit;
+          message = `You have reached your blog limit (${host.currentBlogCount}/${subscription.blogLimit}). Please upgrade your subscription.`;
+        }
+      }
+    } else {
+      // Free plan - 5 blogs
+      canCreateBlog = host.currentBlogCount < 5;
+      message = `You have reached your blog limit (${host.currentBlogCount}/5). Please upgrade your subscription.`;
+    }
+
+    if (!canCreateBlog) {
       return res.status(403).json({
         success: false,
-        message:
-          "You need a Standard or Premium subscription to write blog posts.",
+        message,
         data: {
-          canWriteBlogs: false,
-          currentPlan: activeSubscription?.plan.name || "Basic",
-          needsUpgrade: true,
-        },
+          currentCount: host.currentBlogCount,
+          blogLimit,
+          canUpgrade: true
+        }
       });
     }
 
-    // Check blog post limit if applicable
-    if (activeSubscription.plan.blogPostLimit !== null) {
-      // Get current blog count
-      const currentBlogCount = await prisma.blog.count({
-        where: {
-          hostId: host.id,
-          createdAt: {
-            gte: new Date(new Date().getFullYear(), 0, 1), // From start of year
-          },
-        },
-      });
-
-      if (currentBlogCount >= activeSubscription.plan.blogPostLimit) {
-        return res.status(403).json({
-          success: false,
-          message: `You have reached your annual blog post limit (${activeSubscription.plan.blogPostLimit}).`,
-          data: {
-            currentBlogCount,
-            blogPostLimit: activeSubscription.plan.blogPostLimit,
-            remainingBlogPosts: 0,
-          },
-        });
-      }
-    }
-
-    // Use Object.defineProperty for both properties
-    Object.defineProperty(req, 'host', {
-      value: host,
-      writable: true,
-      configurable: true,
-      enumerable: true
-    });
-    
-    Object.defineProperty(req, 'subscription', {
-      value: activeSubscription,
-      writable: true,
-      configurable: true,
-      enumerable: true
-    });
-    
+    // Add host info to request
+    (req as any).hostInfo = host;
     next();
+  } catch (error: any) {
+    console.error('Error checking blog creation limit:', error);
+    next(error);
   }
-);
+};

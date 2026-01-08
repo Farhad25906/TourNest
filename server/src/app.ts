@@ -5,8 +5,16 @@ import notFound from "./app/middlewares/notFound";
 import config from "./config";
 import cookieParser from "cookie-parser";
 import router from "./app/routes";
+import { PaymentController } from "./app/modules/payment/payment.controller";
+
 
 const app: Application = express();
+
+app.post(
+  "/webhook",
+  express.raw({ type: "application/json" }), // important for signature verification
+  PaymentController.handleStripeWebhookEvent
+);
 app.use(
   cors({
     origin: "http://localhost:3000",
@@ -20,7 +28,6 @@ app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/v1", router);
-
 app.get("/", (req: Request, res: Response) => {
   res.send({
     message: "Server is running..",

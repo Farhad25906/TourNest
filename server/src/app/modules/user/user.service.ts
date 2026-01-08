@@ -74,6 +74,7 @@ const createAdmin = async (req: Request): Promise<Admin> => {
   return result;
 };
 
+// user.service.ts - Update createHosts function
 const createHosts = async (req: Request): Promise<Host> => {
   const file = req.file;
 
@@ -98,8 +99,15 @@ const createHosts = async (req: Request): Promise<Host> => {
       data: userData,
     });
 
+    // Create host with default limits
     const createdHostData = await transactionClient.host.create({
-      data: req.body.host,
+      data: {
+        ...req.body.host,
+        tourLimit: 4, // Default free plan
+        blogLimit: 5, // Default free plan
+        currentTourCount: 0,
+        currentBlogCount: 0,
+      },
     });
 
     return createdHostData;
@@ -150,6 +158,24 @@ const getAllFromDB = async (params: any, options: IOptions) => {
         }
       : {};
 
+  // Determine which relations to include based on role if specified
+  const include = {
+    // Always include basic user data
+    ...(filterData.role
+      ? {
+          // Conditionally include role-specific data based on the role filter
+          admin: filterData.role === UserRole.ADMIN,
+          host: filterData.role === UserRole.HOST,
+          tourist: filterData.role === UserRole.TOURIST,
+        }
+      : {
+          // If no role filter, include all related data
+          admin: true,
+          host: true,
+          tourist: true,
+        }),
+  };
+
   const result = await prisma.user.findMany({
     skip,
     take: limit,
@@ -157,12 +183,47 @@ const getAllFromDB = async (params: any, options: IOptions) => {
     orderBy: {
       [sortBy]: sortOrder,
     },
-    include: {
-      // Include related data
-      admin: true,
-      host: true,
-      tourist: true,
-    },
+    include,
+  });
+
+  // Transform the result to merge role-specific data
+  const transformedResult = result.map((user) => {
+    const baseUser = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      needPasswordChange: user.needPasswordChange,
+      status: user.status,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+
+    // Merge role-specific data based on the user's role
+    switch (user.role) {
+      case UserRole.ADMIN:
+        return {
+          ...baseUser,
+          ...user.admin,
+          type: "admin" as const,
+        };
+      case UserRole.HOST:
+        return {
+          ...baseUser,
+          ...user.host,
+          type: "host" as const,
+        };
+      case UserRole.TOURIST:
+        return {
+          ...baseUser,
+          ...user.tourist,
+          type: "tourist" as const,
+        };
+      default:
+        return {
+          ...baseUser,
+          type: "user" as const,
+        };
+    }
   });
 
   const total = await prisma.user.count({
@@ -175,47 +236,43 @@ const getAllFromDB = async (params: any, options: IOptions) => {
       limit,
       total,
     },
-    data: result,
+    data: transformedResult,
   };
 };
 
 const getMyProfile = async (user: IJWTPayload) => {
-  const userInfo = await prisma.user.findUniqueOrThrow({
+  // First, get user with all related data using a single query
+  const userWithProfile = await prisma.user.findUniqueOrThrow({
     where: {
       email: user.email,
       status: UserStatus.ACTIVE,
     },
-    select: {
-      id: true,
-      email: true,
-      needPasswordChange: true,
-      role: true,
-      status: true,
+    include: {
+      admin: true,
+      host: true,
+      tourist: true,
     },
   });
+  // console.log(userWithProfile);
+  
 
+  const { admin, host, tourist, ...userInfo } = userWithProfile;
+
+  // Determine which profile data to use based on role
   let profileData;
-
-  if (userInfo.role === UserRole.TOURIST) {
-    profileData = await prisma.tourist.findUnique({
-      // Changed from user to tourist
-      where: {
-        email: userInfo.email,
-      },
-    });
-  } else if (userInfo.role === UserRole.HOST) {
-    profileData = await prisma.host.findUnique({
-      where: {
-        email: userInfo.email,
-      },
-    });
-  } else if (userInfo.role === UserRole.ADMIN) {
-    profileData = await prisma.admin.findUnique({
-      where: {
-        email: userInfo.email,
-      },
-    });
+  switch (userInfo.role) {
+    case UserRole.ADMIN:
+      profileData = admin;
+      break;
+    case UserRole.HOST:
+      profileData = host;
+      break;
+    case UserRole.TOURIST:
+      profileData = tourist;
+      break;
   }
+  // console.log(profileData,userInfo, "From Controller");
+  
 
   return {
     ...userInfo,
@@ -243,61 +300,98 @@ const changeProfileStatus = async (
 };
 
 const updateMyProfile = async (user: IJWTPayload, req: Request) => {
+  // Get user with basic info first
   const userInfo = await prisma.user.findUniqueOrThrow({
     where: {
-      email: user?.email,
+      email: user.email,
       status: UserStatus.ACTIVE,
+    },
+    select: {
+      id: true,
+      email: true,
+      role: true,
     },
   });
 
   const file = req.file;
   const updateData = { ...req.body };
+  // console.log(updateData);
+  
 
-  // Handle visitedLocations if it's a string (might come from form data as string)
-  if (userInfo.role === UserRole.HOST && typeof updateData.visitedLocations === 'string') {
-    try {
-      updateData.visitedLocations = JSON.parse(updateData.visitedLocations);
-    } catch (error) {
-      // If parsing fails, keep as is or set to empty array
-      updateData.visitedLocations = [];
-    }
-  }
-
+  // Handle file upload
   if (file) {
     const uploadToCloudinary = await fileUploader.uploadToCloudinary(file);
     updateData.profilePhoto = uploadToCloudinary?.secure_url;
   }
 
-  let profileInfo;
-
-  if (userInfo.role === UserRole.ADMIN) {
-    profileInfo = await prisma.admin.update({
-      where: {
-        email: userInfo.email,
-      },
-      data: updateData,
-    });
-  } else if (userInfo.role === UserRole.HOST) {
-    profileInfo = await prisma.host.update({
-      where: {
-        email: userInfo.email,
-      },
-      data: updateData,
-    });
-  } else if (userInfo.role === UserRole.TOURIST) {
-    profileInfo = await prisma.tourist.update({
-      where: {
-        email: userInfo.email,
-      },
-      data: updateData,
-    });
+  // Handle visitedLocations if it's a string (might come from form data)
+  if (
+    userInfo.role === UserRole.HOST &&
+    typeof updateData.visitedLocations === "string"
+  ) {
+    try {
+      updateData.visitedLocations = JSON.parse(updateData.visitedLocations);
+    } catch (error) {
+      updateData.visitedLocations = [];
+    }
   }
-  console.log(profileInfo);
+
+  // Update profile based on role
+  let profileInfo;
+  switch (userInfo.role) {
+    case UserRole.ADMIN:
+      profileInfo = await prisma.admin.update({
+        where: {
+          email: userInfo.email,
+        },
+        data: updateData,
+      });
+      break;
+    case UserRole.HOST:
+      profileInfo = await prisma.host.update({
+        where: {
+          email: userInfo.email,
+        },
+        data: updateData,
+      });
+      break;
+    case UserRole.TOURIST:
+      profileInfo = await prisma.tourist.update({
+        where: {
+          email: userInfo.email,
+        },
+        data: updateData,
+      });
+      break;
+  }
+  // console.log(userInfo,profileInfo);
   
 
-  return { ...profileInfo };
+  // Return the updated profile with user info
+  return {
+    ...userInfo,
+    ...profileInfo,
+  };
 };
-// Update export
+const deleteUser = async (id: string) => {
+  const userData = await prisma.user.findUniqueOrThrow({
+    where: {
+      id,
+    },
+  });
+
+  const deletedUser = await prisma.user.update({
+    where: {
+      id,
+    },
+    data: {
+      status: UserStatus.INACTIVE,
+    },
+  });
+
+  return deletedUser;
+};
+
 export const UserService = {
   createTourist,
   createAdmin,
@@ -306,4 +400,5 @@ export const UserService = {
   getMyProfile,
   changeProfileStatus,
   updateMyProfile,
+  deleteUser,
 };

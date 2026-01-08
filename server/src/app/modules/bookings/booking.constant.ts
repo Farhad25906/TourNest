@@ -1,3 +1,4 @@
+
 export const bookingSearchableFields = ["id", "status", "paymentStatus"];
 
 export const bookingFilterableFields = [
@@ -20,6 +21,8 @@ export const bookingPopulateFields = {
       id: true,
       email: true,
       role: true,
+      // name: true,
+      // profilePhoto: true,
     },
   },
   tourist: {
@@ -28,6 +31,7 @@ export const bookingPopulateFields = {
       name: true,
       email: true,
       profilePhoto: true,
+      // phone: true,
     },
   },
   tour: {
@@ -48,16 +52,6 @@ export const bookingPopulateFields = {
           profilePhoto: true,
         },
       },
-    },
-  },
-  payments: {
-    select: {
-      id: true,
-      amount: true,
-      status: true,
-      paymentMethod: true,
-      transactionId: true,
-      paidAt: true,
     },
   },
 };

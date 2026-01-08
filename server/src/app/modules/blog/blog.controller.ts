@@ -118,6 +118,8 @@ const deleteComment = catchAsync(async (req: Request, res: Response) => {
 
 const toggleLike = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as IJWTPayload;
+  // console.log(req.user);
+  
   const { blogId } = req.params;
   const result = await BlogService.toggleLike(user, blogId);
 

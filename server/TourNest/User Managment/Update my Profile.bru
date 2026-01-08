@@ -20,7 +20,7 @@ headers {
 }
 
 body:multipart-form {
-  file: @file(/home/farhad-hossen/Downloads/doctor1.jpg)
+  file: @file(/home/farhad-hossen/Downloads/patient1.jpg)
   data: '''
     {
       "phone": "0111111111",
@@ -28,6 +28,10 @@ body:multipart-form {
       "bio": "I am a Host",
     }
   '''
+}
+
+vars:pre-request {
+  PATIENT_TOKEN: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZhcmhhZDFAZ21haWwuY29tIiwicm9sZSI6IkhPU1QiLCJpYXQiOjE3NjYzMjYzNTIsImV4cCI6MTc2NjQxMjc1Mn0.ZKNN_vW0Iilp4QyK-KyLlqESl9y2H3vJLpJnRu9p3W4
 }
 
 settings {

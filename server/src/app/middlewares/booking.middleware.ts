@@ -38,7 +38,7 @@ export const checkBookingAvailability = async (
     });
 
     const totalConfirmedParticipants = currentBookings.reduce(
-      (sum, booking) => sum + booking.participants,
+      (sum, booking) => sum + booking.numberOfPeople,
       0
     );
 

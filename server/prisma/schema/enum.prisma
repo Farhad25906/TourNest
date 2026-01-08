@@ -42,27 +42,30 @@ enum DifficultyLevel {
   EXTREME
 }
 
-enum BookingStatus {
-  PENDING
-  CONFIRMED
-  CANCELLED
-  COMPLETED
-  REFUNDED
-}
-
 enum PaymentStatus {
   PENDING
   PROCESSING
   COMPLETED
   FAILED
   REFUNDED
+  CANCELLED
 }
 
 enum PaymentMethod {
-  STRIPE       // Stripe credit/debit cards
-  BKASH        // Mobile payment (Bangladesh)
-  NAGAD        // Mobile payment (Bangladesh)
-  BANK         // Bank transfer
+  CARD
+  BKASH
+  NAGAD
+  BANK
+  STRIPE
+  COD
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  REFUNDED
 }
 enum SubscriptionStatus {
   ACTIVE

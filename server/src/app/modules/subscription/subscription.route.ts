@@ -1,17 +1,16 @@
+// subscription.route.ts
 import express, { NextFunction, Request, Response } from 'express';
 import { SubscriptionController } from './subscription.controller';
-import { SubscriptionValidation } from './subscription.validation';
+import { 
+  createSubscriptionPlanValidationSchema,
+  updateSubscriptionPlanValidationSchema,
+  createSubscriptionValidationSchema,
+  updateSubscriptionValidationSchema 
+} from './subscription.validation';
 import auth from '../../middlewares/auth';
 import { UserRole } from '@prisma/client';
 
 const router = express.Router();
-
-// Stripe webhook (must be raw body parser)
-router.post(
-  '/stripe-webhook',
-  express.raw({ type: 'application/json' }),
-  SubscriptionController.handleStripeWebhook
-);
 
 // Public routes
 router.get('/plans', SubscriptionController.getAllSubscriptionPlans);
@@ -22,7 +21,7 @@ router.post(
   '/subscribe',
   auth(UserRole.HOST),
   (req: Request, res: Response, next: NextFunction) => {
-    req.body = SubscriptionValidation.createSubscriptionValidationSchema.parse(req.body);
+    req.body = createSubscriptionValidationSchema.parse(req.body);
     return SubscriptionController.createSubscription(req, res, next);
   }
 );
@@ -31,18 +30,6 @@ router.get(
   '/my-subscription',
   auth(UserRole.HOST),
   SubscriptionController.getCurrentSubscription
-);
-
-router.get(
-  '/verify-session/:sessionId',
-  auth(UserRole.HOST),
-  SubscriptionController.verifyCheckoutSession
-);
-
-router.get(
-  '/customer-portal',
-  auth(UserRole.HOST),
-  SubscriptionController.createCustomerPortalSession
 );
 
 router.post(
@@ -62,7 +49,7 @@ router.post(
   '/create-plan',
   auth(UserRole.ADMIN),
   (req: Request, res: Response, next: NextFunction) => {
-    req.body = SubscriptionValidation.createSubscriptionPlanValidationSchema.parse(req.body);
+    req.body = createSubscriptionPlanValidationSchema.parse(req.body);
     return SubscriptionController.createSubscriptionPlan(req, res, next);
   }
 );
@@ -71,7 +58,7 @@ router.patch(
   '/plans/:id',
   auth(UserRole.ADMIN),
   (req: Request, res: Response, next: NextFunction) => {
-    req.body = SubscriptionValidation.updateSubscriptionPlanValidationSchema.parse(req.body);
+    req.body = updateSubscriptionPlanValidationSchema.parse(req.body);
     return SubscriptionController.updateSubscriptionPlan(req, res, next);
   }
 );
@@ -82,14 +69,31 @@ router.delete(
   SubscriptionController.deleteSubscriptionPlan
 );
 
+
+
 router.get(
-  '/',
+  '/:id',
   auth(UserRole.ADMIN),
-  SubscriptionController.getAllSubscriptions
+  SubscriptionController.getSubscriptionDetails
+);
+
+router.patch(
+  '/:id',
+  auth(UserRole.ADMIN),
+  (req: Request, res: Response, next: NextFunction) => {
+    req.body = updateSubscriptionValidationSchema.parse(req.body);
+    return SubscriptionController.updateSubscription(req, res, next);
+  }
+);
+
+router.delete(
+  '/:id',
+  auth(UserRole.ADMIN),
+  SubscriptionController.deleteSubscription
 );
 
 router.get(
-  '/analytics',
+  '/analytics/overview',
   auth(UserRole.ADMIN),
   SubscriptionController.getSubscriptionAnalytics
 );

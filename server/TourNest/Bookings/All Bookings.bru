@@ -1,11 +1,11 @@
 meta {
   name: All Bookings
   type: http
-  seq: 3
+  seq: 1
 }
 
 get {
-  url: {{BASE_URL}}/tour
+  url: {{BASE_URL}}/bookings
   body: none
   auth: inherit
 }
@@ -20,7 +20,7 @@ headers {
 }
 
 vars:pre-request {
-  ADMIN_TOKEN: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZhcmhhZDJAZ21haWwuY29tIiwicm9sZSI6IkhPU1QiLCJpYXQiOjE3NjU0Nzc2MzIsImV4cCI6MTc2NTU2NDAzMn0.7rDSH-T_REwBE0XdLA8AL-EEWeyzuBXi8BnH9h30WRc
+  ADMIN_TOKEN: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZhcmhhZEBwaC5jb20iLCJyb2xlIjoiQURNSU4iLCJpYXQiOjE3Njc1NjE4NzcsImV4cCI6MTc2NzY0ODI3N30.gjhfmCVA8NLFc1MKH_n9zBnvrZwqli-VJGnFnNzr8ow
 }
 
 settings {

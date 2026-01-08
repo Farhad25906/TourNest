@@ -1,54 +1,78 @@
 import { Request } from "express";
-import { Prisma } from "@prisma/client";
+import { Blog, Prisma } from "@prisma/client";
 import { fileUploader } from "../../helper/fileUploader";
 import { IOptions, paginationHelper } from "../../helper/paginationHelper";
 import { blogSearchableFields } from "./blog.constant";
 import { IJWTPayload } from "../../types/common";
 import { prisma } from "../../shared/prisma";
 
-const createBlog = async (user: IJWTPayload, req: Request) => {
-  // Check if host has active subscription
-  const host = await prisma.host.findUniqueOrThrow({
+// blog.service.ts - Update createBlog function
+// Update the createBlog function signature
+const createBlog = async (user: IJWTPayload, req: Request): Promise<Blog> => {
+  const hostInfo = await prisma.host.findUniqueOrThrow({
     where: {
       email: user.email,
       isDeleted: false,
     },
     include: {
-      subscriptions: {
-        where: {
-          status: "ACTIVE",
-          endDate: {
-            gt: new Date(),
-          },
-        },
-      },
+      subscription: true,
     },
   });
+  console.log(hostInfo);
 
-  if (host.subscriptions.length === 0) {
-    throw new Error("Host must have an active subscription to create blogs");
-  }
+  // Handle cover image upload
+  let coverImage = null;
 
-  const file = req.file;
-  if (file) {
-    const uploadResult = await fileUploader.uploadToCloudinary(file);
-    req.body.coverImage = uploadResult?.secure_url;
+  if (req.file) {
+    const uploadResult = await fileUploader.uploadToCloudinary(req.file);
+    if (uploadResult?.secure_url) {
+      coverImage = uploadResult.secure_url;
+    }
   }
 
   const blogData = {
     ...req.body,
-    hostId: host.id,
+    hostId: hostInfo.id,
+    coverImage: coverImage || req.body.coverImage,
   };
 
-  const result = await prisma.blog.create({
-    data: blogData,
+  const result = await prisma.$transaction(async (tx) => {
+    // Create the blog
+    const blog = await tx.blog.create({
+      data: blogData,
+    });
+
+    // Update host blog count
+    await tx.host.update({
+      where: { id: hostInfo.id },
+      data: {
+        currentBlogCount: {
+          increment: 1,
+        },
+      },
+    });
+
+    // Update subscription remaining blogs if applicable
+    if (hostInfo.subscriptionId && hostInfo.subscription?.blogLimit !== null) {
+      await tx.subscription.update({
+        where: { id: hostInfo.subscriptionId },
+        data: {
+          remainingBlogs: {
+            decrement: 1,
+          },
+        },
+      });
+    }
+
+    return blog;
   });
 
   return result;
 };
 
 const getAllBlogs = async (params: any, options: IOptions) => {
-  const { page, limit, skip, sortBy, sortOrder } = paginationHelper.calculatePagination(options);
+  const { page, limit, skip, sortBy, sortOrder } =
+    paginationHelper.calculatePagination(options);
   const { searchTerm, ...filterData } = params;
 
   const andConditions: Prisma.BlogWhereInput[] = [];
@@ -79,9 +103,8 @@ const getAllBlogs = async (params: any, options: IOptions) => {
     });
   }
 
-  const whereConditions: Prisma.BlogWhereInput = andConditions.length > 0
-    ? { AND: andConditions }
-    : {};
+  const whereConditions: Prisma.BlogWhereInput =
+    andConditions.length > 0 ? { AND: andConditions } : {};
 
   const result = await prisma.blog.findMany({
     skip,
@@ -271,24 +294,104 @@ const deleteBlog = async (user: IJWTPayload, id: string) => {
     },
   });
 
-  const result = await prisma.blog.delete({
-    where: { id },
+  // Delete all related records first
+  await prisma.$transaction(async (tx) => {
+    // 1. Delete blog comment likes
+    await tx.blogCommentLike.deleteMany({
+      where: {
+        comment: {
+          blogId: id,
+        },
+      },
+    });
+
+    // 2. Delete blog comments (replies first, then parent comments)
+    // Delete replies first
+    await tx.blogComment.deleteMany({
+      where: {
+        parent: {
+          blogId: id,
+        },
+      },
+    });
+
+    // Delete parent comments
+    await tx.blogComment.deleteMany({
+      where: {
+        blogId: id,
+      },
+    });
+
+    // 3. Delete blog likes
+    await tx.blogLike.deleteMany({
+      where: {
+        blogId: id,
+      },
+    });
+
+    // 4. Now delete the blog
+    await tx.blog.delete({
+      where: { id },
+    });
+
+    // 5. Decrement host blog count
+    await tx.host.update({
+      where: { id: host.id },
+      data: {
+        currentBlogCount: {
+          decrement: 1,
+        },
+      },
+    });
+
+    // 6. If host has subscription, increment remaining blogs
+    if (host.subscriptionId) {
+      await tx.subscription.update({
+        where: { id: host.subscriptionId },
+        data: {
+          remainingBlogs: {
+            increment: 1,
+          },
+        },
+      });
+    }
   });
 
-  return result;
+  return blog;
 };
 
 const createComment = async (user: IJWTPayload, blogId: string, data: any) => {
+  // First find the user by email to get their ID
+  const dbUser = await prisma.user.findUnique({
+    where: {
+      email: user.email,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!dbUser) {
+    throw new Error("User not found");
+  }
+
+  const userId = dbUser.id;
+
   await prisma.blog.findUniqueOrThrow({
     where: {
       id: blogId,
     },
   });
 
+  // Use the relation field 'author' instead of 'authorId'
   const commentData = {
     ...data,
-    blogId,
-    authorId: user.id,
+    blog: {
+      connect: { id: blogId },
+    },
+    author: {
+      connect: { id: userId },
+    },
   };
 
   const result = await prisma.blogComment.create({
@@ -298,7 +401,11 @@ const createComment = async (user: IJWTPayload, blogId: string, data: any) => {
   return result;
 };
 
-const updateComment = async (user: IJWTPayload, commentId: string, data: any) => {
+const updateComment = async (
+  user: IJWTPayload,
+  commentId: string,
+  data: any
+) => {
   const comment = await prisma.blogComment.findUniqueOrThrow({
     where: {
       id: commentId,
@@ -340,6 +447,23 @@ const deleteComment = async (user: IJWTPayload, commentId: string) => {
 };
 
 const toggleLike = async (user: IJWTPayload, blogId: string) => {
+  // First, find the user by email to get their ID
+  const dbUser = await prisma.user.findUnique({
+    where: {
+      email: user.email,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!dbUser) {
+    throw new Error("User not found");
+  }
+
+  const userId = dbUser.id;
+
+  // Verify the blog exists
   await prisma.blog.findUniqueOrThrow({
     where: {
       id: blogId,
@@ -349,7 +473,7 @@ const toggleLike = async (user: IJWTPayload, blogId: string) => {
   const existingLike = await prisma.blogLike.findUnique({
     where: {
       userId_blogId: {
-        userId: user.id,
+        userId: userId,
         blogId,
       },
     },
@@ -377,7 +501,7 @@ const toggleLike = async (user: IJWTPayload, blogId: string) => {
     // Like
     await prisma.blogLike.create({
       data: {
-        userId: user.id,
+        userId: userId,
         blogId,
       },
     });
@@ -394,7 +518,6 @@ const toggleLike = async (user: IJWTPayload, blogId: string) => {
     return { liked: true };
   }
 };
-
 const toggleCommentLike = async (user: IJWTPayload, commentId: string) => {
   await prisma.blogComment.findUniqueOrThrow({
     where: {

@@ -1,11 +1,13 @@
+
 import { z } from 'zod';
-import { BookingStatus, PaymentStatus } from '@prisma/client';
+import { BookingStatus, PaymentStatus, PaymentMethod } from '@prisma/client';
 
 const createBookingValidationSchema = z.object({
   tourId: z.string().min(1, 'Tour ID is required'),
   numberOfPeople: z.number().int().min(1, 'At least 1 person is required'),
   totalAmount: z.number().positive('Total amount must be positive'),
   specialRequests: z.string().optional(),
+  paymentMethod: z.nativeEnum(PaymentMethod).optional().default('STRIPE'),
   status: z.nativeEnum(BookingStatus).optional().default('PENDING'),
   paymentStatus: z.nativeEnum(PaymentStatus).optional().default('PENDING'),
   bookingDate: z.string().transform((str) => new Date(str)).optional(),
@@ -44,3 +46,5 @@ export const BookingValidation = {
   updateBookingStatusValidationSchema,
   getBookingsValidationSchema
 };
+
+

@@ -58,9 +58,9 @@ const updateTour = catchAsync(async (req: Request, res: Response) => {
 
 const deleteTour = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const userId = req.user?.id;
   
-  const result = await TourService.deleteTour(id, userId);
+  // Just pass the tour ID to the service
+  const result = await TourService.deleteTour(id);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -69,7 +69,6 @@ const deleteTour = catchAsync(async (req: Request, res: Response) => {
     data: result
   });
 });
-
 const getHostTours = catchAsync(async (req: Request, res: Response) => {
   const filters = pick(req.query, hostTourSearchableFields); 
   const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);

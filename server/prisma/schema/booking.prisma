@@ -2,10 +2,11 @@ model Booking {
   id              String        @id @default(uuid())
   touristId       String
   tourId          String
+  userId          String
   bookingDate     DateTime      @default(now())
   status          BookingStatus @default(PENDING)
   paymentStatus   PaymentStatus @default(PENDING)
-  totalAmount     Float
+  totalAmount     Decimal
   numberOfPeople  Int
   specialRequests String?
   isReviewed      Boolean       @default(false)
@@ -14,10 +15,10 @@ model Booking {
 
   tourist  Tourist   @relation(fields: [touristId], references: [id])
   tour     Tour      @relation(fields: [tourId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
   payments Payment[]
-  user     User?     @relation(fields: [userId], references: [id])
-  userId   String?
-  
+  // review    Review?
+  review   Review?
 
   @@unique([touristId, tourId, bookingDate])
   @@map("bookings")
